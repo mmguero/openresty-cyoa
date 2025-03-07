@@ -3,6 +3,7 @@
 **/*.crt
 **/.git*
 **/auth.env
+**/.env
 **/.ldap_config_defaults
 **/htpasswd
 docker-compose*yml

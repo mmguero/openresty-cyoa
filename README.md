@@ -1,19 +1,23 @@
-# NGINX Reverse Proxy with Active Directory/Lightweight Directory Access Protocol (LDAP) Authentication
+# OpenResty Web Platform with Various Authentication Methods
 
-![Docker Image](https://github.com/mmguero/nginx-ldap/workflows/nginx-ldap-build-push-ghcr/badge.svg)
+![Docker Image](https://github.com/mmguero/openresty-loaded/workflows/openresty-loaded-build-push-ghcr/badge.svg)
 
-This setup uses [NGINX](https://www.nginx.com/) with the [nginx-auth-ldap](https://github.com/mmguero-dev/nginx-auth-ldap) authentication module to perform the following functions for an HTTP service:
+This setup uses [OpenResty](https://openresty.org/en/) with the [nginx-auth-ldap](https://github.com/mmguero-dev/nginx-auth-ldap) authentication module and the [lua-resty-openidc](https://github.com/zmartzone/lua-resty-openidc/) library to perform the following functions for an HTTP service:
 
 * reverse proxy HTTP connections over HTTPS
-* handle authentication via Active Directory/Lightweight Directory Access Protocol (LDAP)
+* handle authentication via
+    - HTTP basic
+    - Active Directory/Lightweight Directory Access Protocol (LDAP)
+    - Keycloak
+    - no authentication
 
-It can be used with [docker](https://docs.docker.com/get-docker/)/[docker-compose](https://docs.docker.com/compose/install/) or [podman](https://podman.io/)/[podman-compose](https://github.com/containers/podman-compose) to encapsulate the NGINX runtime on the host. A pre-built container image can be found on GitHub's container registry as [oci.guero.org/nginx-ldap](https://github.com/mmguero/nginx-ldap/pkgs/container/nginx-ldap).
+It can be used with [docker](https://docs.docker.com/get-docker/)/[docker-compose](https://docs.docker.com/compose/install/) or [podman](https://podman.io/)/[podman-compose](https://github.com/containers/podman-compose) to encapsulate the OpenResty runtime on the host. A pre-built container image can be found on GitHub's container registry as [oci.guero.org/openresty-loaded](https://github.com/mmguero/openresty-loaded/pkgs/container/openresty-loaded).
 
 ## System Requirements
 
 * **Either**
-    * [docker](https://docs.docker.com/get-docker/)/[docker-compose](https://docs.docker.com/compose/install/)
-    * [podman](https://podman.io/getting-started/installation)/[podman-compose](https://raw.githubusercontent.com/containers/podman-compose/devel/podman_compose.py) (see [`podman-rootless-prep-01-system.sh`](scripts/podman-rootless-prep-01-system.sh) and [`podman-rootless-prep-02-local.sh`](scripts/podman-rootless-prep-02-local.sh) for an example system preparation script for a RHEL 8-compatible system)
+    * [docker](https://docs.docker.com/get-docker/)/[docker compose](https://docs.docker.com/compose/)
+    * [podman](https://podman.io/getting-started/installation)/[podman-compose](https://github.com/containers/podman-compose)
 
 ## Configuring LDAP Authentication
 

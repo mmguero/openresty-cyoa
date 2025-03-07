@@ -1,66 +1,50 @@
-#!/usr/bin/env bash
-
+#!/bin/bash
 set -e
 
-# Warn if the DOCKER_HOST socket does not exist
-if [[ $DOCKER_HOST = unix://* ]]; then
-  socket_file=${DOCKER_HOST#unix://}
-  if ! [ -S $socket_file ]; then
-    cat >&2 <<-EOT
-  ERROR: you need to share your Docker host socket with a volume at $socket_file
-  Typically you should run your container with: \`-v /var/run/docker.sock:$socket_file:ro\`
-  See the jwilder/nginx-proxy documentation at http://git.io/vZaGJ
-EOT
-    socketMissing=1
-  fi
-fi
+NGINX_CONF_DIR=/etc/nginx
+NGINX_CONF=${NGINX_CONF_DIR}/nginx.conf
+NGINX_TEMPLATES_DIR=${NGINX_CONF_DIR}/templates
+NGINX_CONFD_DIR=${NGINX_CONF_DIR}/conf.d
 
-# Compute the DNS resolvers for use in the templates - if the IP contains ":", it's IPv6 and must be enclosed in []
-export RESOLVERS=$(awk '$1 == "nameserver" {print ($2 ~ ":")? "["$2"]": $2}' ORS=' ' /etc/resolv.conf | sed 's/ *$//g')
-if [ "x$RESOLVERS" = "x" ]; then
-    echo "Warning: unable to determine DNS resolvers for nginx" >&2
-    unset RESOLVERS
-fi
+# set up for HTTPS/HTTP and auth modes (basic, none, keycloak, LDAP/LDAPS/LDAP+StartTLS)
 
-# If the user has run the default command and the socket doesn't exist, fail
-if [ "$socketMissing" = 1 -a "$1" = 'supervisord' -a "$2" = '-c' -a "$3" = '/etc/supervisord.conf' ]; then
-  exit 1
-fi
+# "include" file that indicates the locations of the PEM files
+NGINX_SSL_ON_CONF=${NGINX_CONF_DIR}/nginx_ssl_on_config.conf
 
-# set up for HTTPS/HTTP and NGINX HTTP basic vs. LDAP/LDAPS/LDAP+StartTLS auth
+# "include" symlink name which, at runtime, will point to either the ON or OFF file
+NGINX_SSL_CONF=${NGINX_CONF_DIR}/nginx_ssl_config.conf
 
-# "include" file that sets 'ssl on' and indicates the locations of the PEM files
-NGINX_SSL_ON_CONF=/etc/nginx/nginx_ssl_on_config.conf
-# "include" file that sets 'ssl off'
-NGINX_SSL_OFF_CONF=/etc/nginx/nginx_ssl_off_config.conf
-# "include" symlink name which, at runtime, will point to either the ON of OFF file
-NGINX_SSL_CONF=/etc/nginx/nginx_ssl_config.conf
+# a blank file just to use as an "include" placeholder for when .conf files aren't used
+NGINX_BLANK_CONF=${NGINX_CONF_DIR}/nginx_blank.conf
 
-# a blank file just to use as an "include" placeholder for the nginx's LDAP config when LDAP is not used
-NGINX_BLANK_CONF=/etc/nginx/nginx_blank.conf
+# "include" file for resolver directive
+NGINX_RESOLVER_CONF=${NGINX_CONF_DIR}/nginx_system_resolver.conf
 
-# "include" file for auth_basic, prompt, and htpasswd location
-NGINX_BASIC_AUTH_CONF=/etc/nginx/nginx_auth_basic.conf
+# "include" file for auth_basic, prompt, and htpasswd
+NGINX_BASIC_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_basic.conf
 
 # "include" file for auth_ldap, prompt, and "auth_ldap_servers" name
-NGINX_LDAP_AUTH_CONF=/etc/nginx/nginx_auth_ldap.conf
+NGINX_LDAP_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_ldap.conf
+
+# "include" file for KeyCloak authentication
+NGINX_KEYCLOAK_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_keycloak.conf
 
 # "include" file for fully disabling authentication
-NGINX_NO_AUTH_CONF=/etc/nginx/nginx_auth_disabled.conf
+NGINX_NO_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_disabled.conf
 
 # volume-mounted user configuration containing "ldap_server ad_server" section with URL, binddn, etc.
-NGINX_LDAP_USER_CONF=/etc/nginx/nginx_ldap.conf
+NGINX_LDAP_USER_CONF=${NGINX_CONF_DIR}/nginx_ldap.conf
 
-# runtime "include" file for auth method (link to either NGINX_BASIC_AUTH_CONF or NGINX_LDAP_AUTH_CONF)
-NGINX_RUNTIME_AUTH_CONF=/etc/nginx/nginx_auth_rt.conf
+# runtime "include" file for auth method (link to NGINX_BASIC_AUTH_CONF, NGINX_LDAP_AUTH_CONF, NGINX_KEYCLOAK_AUTH_CONF, or NGINX_NO_AUTH_CONF)
+NGINX_RUNTIME_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_rt.conf
 
 # runtime "include" file for ldap config (link to either NGINX_BLANK_CONF or (possibly modified) NGINX_LDAP_USER_CONF)
-NGINX_RUNTIME_LDAP_CONF=/etc/nginx/nginx_ldap_rt.conf
+NGINX_RUNTIME_LDAP_CONF=${NGINX_CONF_DIR}/nginx_ldap_rt.conf
 
 # config file for stunnel if using stunnel to issue LDAP StartTLS function
 STUNNEL_CONF=/etc/stunnel/stunnel.conf
 
-CA_TRUST_HOST_DIR=/etc/nginx/ca-trust
+CA_TRUST_HOST_DIR=/var/local/ca-trust
 CA_TRUST_RUN_DIR=/var/run/ca-trust
 
 # copy trusted CA certs to runtime directory and c_rehash them to create symlinks
@@ -93,7 +77,7 @@ if (( ${#CA_FILES} )) ; then
 
     # variables for nginx config
     NGINX_LDAP_CA_PATH_LINE="  ssl_ca_dir $CA_TRUST_RUN_DIR;"
-    ( [[ -n $NGINX_LDAP_TLS_STUNNEL_CHECK_HOST ]] || [[ -n $NGINX_LDAP_TLS_STUNNEL_CHECK_IP ]] ) && NGINX_LDAP_CHECK_REMOTE_CERT_LINE="  ssl_check_cert on;" || NGINX_LDAP_CHECK_REMOTE_CERT_LINE="  ssl_check_cert chain;"
+    ( [[ -n $NGINX_LDAP_TLS_STUNNEL_CHECK_HOST ]] || [[ -n $NGINX_LDAP_TLS_STUNNEL_CHECK_IP ]] ) && NGINX_LDAP_CHECK_REMOTE_CERT_LINE="  ssl_check_cert on;" || NGINX_LDAP_CHECK_REMOTE_CERT_LINE="  ssl_check_cert off;"
   fi
   popd >/dev/null 2>&1
 fi
@@ -101,13 +85,28 @@ fi
 if [[ -z $NGINX_SSL ]] || [[ "$NGINX_SSL" != "false" ]]; then
   # doing encrypted HTTPS
   ln -sf "$NGINX_SSL_ON_CONF" "$NGINX_SSL_CONF"
+  SSL_FLAG=" ssl"
 else
   # doing unencrypted HTTP (not recommended)
-  ln -sf "$NGINX_SSL_OFF_CONF" "$NGINX_SSL_CONF"
+  ln -sf "$NGINX_BLANK_CONF" "$NGINX_SSL_CONF"
+  SSL_FLAG=""
+fi
+# generate listen_####.conf files with appropriate SSL flag (since the NGINX
+#   listen directive doesn't allow using variables)
+if [[ -f "${NGINX_CONF}" ]]; then
+  LISTEN_PORT_CONF_PATTERN="^\s*include\s+(${NGINX_CONF_DIR}/listen_([0-9]+)\.conf)\s*;\s*$"
+  while IFS= read -r LINE; do
+    if [[ "${LINE}" =~ ${LISTEN_PORT_CONF_PATTERN} ]]; then
+      IFILE=${BASH_REMATCH[1]}
+      PORT=${BASH_REMATCH[2]}
+      [[ ! -f "${IFILE}" ]] && echo "listen ${PORT}${SSL_FLAG};" > "${IFILE}"
+    fi
+  done < "${NGINX_CONF}"
 fi
 
-if [[ -z $NGINX_BASIC_AUTH ]] || [[ "$NGINX_BASIC_AUTH" == "true" ]]; then
-  # doing HTTP basic auth instead of ldap
+# NGINX_AUTH_MODE basic|ldap|keycloak|no_authentication
+if [[ -z $NGINX_AUTH_MODE ]] || [[ "$NGINX_AUTH_MODE" == "basic" ]] || [[ "$NGINX_AUTH_MODE" == "true" ]]; then
+  # doing HTTP basic auth
 
   # point nginx_auth_rt.conf to nginx_auth_basic.conf
   ln -sf "$NGINX_BASIC_AUTH_CONF" "$NGINX_RUNTIME_AUTH_CONF"
@@ -115,7 +114,7 @@ if [[ -z $NGINX_BASIC_AUTH ]] || [[ "$NGINX_BASIC_AUTH" == "true" ]]; then
   # ldap configuration is empty
   ln -sf "$NGINX_BLANK_CONF" "$NGINX_RUNTIME_LDAP_CONF"
 
-elif [[ "$NGINX_BASIC_AUTH" == "no_authentication" ]]; then
+elif [[ "$NGINX_AUTH_MODE" == "no_authentication" ]] || [[ "$NGINX_AUTH_MODE" == "none" ]] || [[ "$NGINX_AUTH_MODE" == "no" ]]; then
   # completely disabling authentication (not recommended)
 
   # point nginx_auth_rt.conf to nginx_auth_disabled.conf
@@ -124,7 +123,16 @@ elif [[ "$NGINX_BASIC_AUTH" == "no_authentication" ]]; then
   # ldap configuration is empty
   ln -sf "$NGINX_BLANK_CONF" "$NGINX_RUNTIME_LDAP_CONF"
 
-else
+elif [[ "$NGINX_AUTH_MODE" == "keycloak" ]]; then
+  # Keycloak authentication
+
+  # point nginx_auth_rt.conf to nginx_auth_keycloak.conf
+  ln -sf "$NGINX_KEYCLOAK_AUTH_CONF" "$NGINX_RUNTIME_AUTH_CONF"
+
+  # ldap configuration is empty
+  ln -sf "$NGINX_BLANK_CONF" "$NGINX_RUNTIME_LDAP_CONF"
+
+elif [[ "$NGINX_AUTH_MODE" == "ldap" ]] || [[ "$NGINX_AUTH_MODE" == "false" ]]; then
   # ldap authentication
 
   # point nginx_auth_rt.conf to nginx_auth_ldap.conf
@@ -177,7 +185,7 @@ else
     # create PEM key for stunnel (this key doesn't matter as we're only using stunnel in client mode)
     pushd /tmp >/dev/null 2>&1
     openssl genrsa -out key.pem 2048
-    openssl req -new -x509 -key key.pem -out cert.pem -days 3650 -subj "/CN=$(hostname)/O=stunnel/C=US"
+    openssl req -new -x509 -key key.pem -out cert.pem -days 3650 -subj "/CN=$(hostname)/O=Malcolm/C=US"
     cat key.pem cert.pem > /etc/stunnel/stunnel.pem
     chmod 600 /etc/stunnel/stunnel.pem
     rm -f key.pem cert.pem
@@ -237,6 +245,30 @@ EOF
   fi # stunnel/starttls vs. ldap/ldaps
 
 fi # basic vs. ldap
+
+# if the runtime htpasswd file doesn't exist but the "preseed" does, copy the preseed over for runtime
+if [[ ! -f ${NGINX_CONF_DIR}/auth/htpasswd ]] && [[ -f /tmp/auth/default/htpasswd ]]; then
+  cp /tmp/auth/default/htpasswd ${NGINX_CONF_DIR}/auth/htpasswd
+  [[ -n ${PUID} ]] && chown -f ${PUID} ${NGINX_CONF_DIR}/auth/htpasswd
+  [[ -n ${PGID} ]] && chown -f :${PGID} ${NGINX_CONF_DIR}/auth/htpasswd
+  rm -rf /tmp/auth/* || true
+fi
+
+# now process the environment variable substitutions
+for TEMPLATE in "$NGINX_TEMPLATES_DIR"/*.conf.template; do
+  DOLLAR=$ envsubst < "$TEMPLATE" > "$NGINX_CONFD_DIR/$(basename "$TEMPLATE"| sed 's/\.template$//')"
+done
+
+# put the DNS resolver (nameserver from /etc/resolv.conf) into NGINX_RESOLVER_CONF
+DNS_SERVER="$(grep -i '^nameserver' /etc/resolv.conf | head -n1 | cut -d ' ' -f2)"
+[[ -z "${DNS_SERVER:-}" ]] && DNS_SERVER="127.0.0.11"
+export DNS_SERVER
+echo "resolver ${DNS_SERVER};" > "${NGINX_RESOLVER_CONF}"
+
+set -e
+
+# some cleanup, if necessary
+rm -rf /var/log/nginx/* || true
 
 # start supervisor (which will spawn nginx, stunnel, etc.) or whatever the default command is
 exec "$@"
