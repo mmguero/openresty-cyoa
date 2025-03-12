@@ -29,6 +29,9 @@ NGINX_LDAP_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_ldap.conf
 # "include" file for KeyCloak authentication
 NGINX_KEYCLOAK_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_keycloak.conf
 
+# "include" file for KeyCloak authentication translating basic to token
+NGINX_KEYCLOAK_AUTH_BASIC_CONF=${NGINX_CONF_DIR}/nginx_auth_keycloak_basic.conf
+
 # "include" file for fully disabling authentication
 NGINX_NO_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_disabled.conf
 
@@ -37,6 +40,9 @@ NGINX_LDAP_USER_CONF=${NGINX_CONF_DIR}/nginx_ldap.conf
 
 # runtime "include" file for auth method (link to NGINX_BASIC_AUTH_CONF, NGINX_LDAP_AUTH_CONF, NGINX_KEYCLOAK_AUTH_CONF, or NGINX_NO_AUTH_CONF)
 NGINX_RUNTIME_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_rt.conf
+
+# runtime "include" file for a location where we basically force basic auth (symlink for keycloak to translate basic -> token)
+NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_CONF=${NGINX_CONF_DIR}/nginx_auth_basic_translate_rt.conf
 
 # runtime "include" file for ldap config (link to either NGINX_BLANK_CONF or (possibly modified) NGINX_LDAP_USER_CONF)
 NGINX_RUNTIME_LDAP_CONF=${NGINX_CONF_DIR}/nginx_ldap_rt.conf
@@ -108,8 +114,9 @@ fi
 if [[ -z $NGINX_AUTH_MODE ]] || [[ "$NGINX_AUTH_MODE" == "basic" ]] || [[ "$NGINX_AUTH_MODE" == "true" ]]; then
   # doing HTTP basic auth
 
-  # point nginx_auth_rt.conf to nginx_auth_basic.conf
+  # point auth to nginx_auth_basic.conf
   ln -sf "$NGINX_BASIC_AUTH_CONF" "$NGINX_RUNTIME_AUTH_CONF"
+  ln -sf "$NGINX_BASIC_AUTH_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_CONF"
 
   # ldap configuration is empty
   ln -sf "$NGINX_BLANK_CONF" "$NGINX_RUNTIME_LDAP_CONF"
@@ -117,8 +124,9 @@ if [[ -z $NGINX_AUTH_MODE ]] || [[ "$NGINX_AUTH_MODE" == "basic" ]] || [[ "$NGIN
 elif [[ "$NGINX_AUTH_MODE" == "no_authentication" ]] || [[ "$NGINX_AUTH_MODE" == "none" ]] || [[ "$NGINX_AUTH_MODE" == "no" ]]; then
   # completely disabling authentication (not recommended)
 
-  # point nginx_auth_rt.conf to nginx_auth_disabled.conf
+  # point auth to nginx_auth_disabled.conf
   ln -sf "$NGINX_NO_AUTH_CONF" "$NGINX_RUNTIME_AUTH_CONF"
+  ln -sf "$NGINX_NO_AUTH_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_CONF"
 
   # ldap configuration is empty
   ln -sf "$NGINX_BLANK_CONF" "$NGINX_RUNTIME_LDAP_CONF"
@@ -126,8 +134,9 @@ elif [[ "$NGINX_AUTH_MODE" == "no_authentication" ]] || [[ "$NGINX_AUTH_MODE" ==
 elif [[ "$NGINX_AUTH_MODE" == "keycloak" ]]; then
   # Keycloak authentication
 
-  # point nginx_auth_rt.conf to nginx_auth_keycloak.conf
+  # point auth to keycloak
   ln -sf "$NGINX_KEYCLOAK_AUTH_CONF" "$NGINX_RUNTIME_AUTH_CONF"
+  ln -sf "$NGINX_KEYCLOAK_AUTH_BASIC_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_CONF"
 
   # ldap configuration is empty
   ln -sf "$NGINX_BLANK_CONF" "$NGINX_RUNTIME_LDAP_CONF"
@@ -137,6 +146,7 @@ elif [[ "$NGINX_AUTH_MODE" == "ldap" ]] || [[ "$NGINX_AUTH_MODE" == "false" ]]; 
 
   # point nginx_auth_rt.conf to nginx_auth_ldap.conf
   ln -sf "$NGINX_LDAP_AUTH_CONF" "$NGINX_RUNTIME_AUTH_CONF"
+  ln -sf "$NGINX_LDAP_AUTH_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_CONF"
 
   # parse URL information out of user ldap configuration
   # example:
@@ -259,11 +269,18 @@ for TEMPLATE in "$NGINX_TEMPLATES_DIR"/*.conf.template; do
   DOLLAR=$ envsubst < "$TEMPLATE" > "$NGINX_CONFD_DIR/$(basename "$TEMPLATE"| sed 's/\.template$//')"
 done
 
-# put the DNS resolver (nameserver from /etc/resolv.conf) into NGINX_RESOLVER_CONF
-DNS_SERVER="$(grep -i '^nameserver' /etc/resolv.conf | head -n1 | cut -d ' ' -f2)"
+if [[ -z "${NGINX_RESOLVER_OVERRIDE:-}" ]]; then
+  # put the DNS resolver (nameserver from /etc/resolv.conf) into NGINX_RESOLVER_CONF
+  DNS_SERVER="$(grep -i '^nameserver' /etc/resolv.conf | head -n1 | cut -d ' ' -f2)"
+else
+  DNS_SERVER=${NGINX_RESOLVER_OVERRIDE}
+fi
 [[ -z "${DNS_SERVER:-}" ]] && DNS_SERVER="127.0.0.11"
 export DNS_SERVER
-echo "resolver ${DNS_SERVER};" > "${NGINX_RESOLVER_CONF}"
+echo -n "resolver ${DNS_SERVER}" > "${NGINX_RESOLVER_CONF}"
+[[ "${NGINX_RESOLVER_IPV4_OFF:-false}" == "true" ]] && echo -n " ipv4=off" >> "${NGINX_RESOLVER_CONF}"
+[[ "${NGINX_RESOLVER_IPV6_OFF:-false}" == "true" ]] && echo -n " ipv6=off" >> "${NGINX_RESOLVER_CONF}"
+echo ";" >> "${NGINX_RESOLVER_CONF}"
 
 set -e
 

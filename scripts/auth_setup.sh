@@ -32,23 +32,10 @@ while true; do
 done
 PASSWORD_ENCRYPTED="$(echo $PASSWORD | openssl passwd -1 -stdin)"
 
-# get previous username to remove from htpasswd file if it's changed
-unset USERNAME_PREVIOUS
-[[ -r auth.env ]] && source auth.env && USERNAME_PREVIOUS="$NGINX_USERNAME"
-
-cat <<EOF > auth.env
-NGINX_USERNAME=$USERNAME
-NGINX_PASSWORD=$PASSWORD_ENCRYPTED
-EOF
-chmod 600 ./auth.env
-
 pushd ./nginx/ >/dev/null 2>&1
 # create or update the htpasswd file
 [[ ! -f ./htpasswd ]] && HTPASSWD_CREATE_FLAG="-c" || HTPASSWD_CREATE_FLAG=""
 htpasswd -b $HTPASSWD_CREATE_FLAG -B ./htpasswd "$USERNAME" "$PASSWORD" >/dev/null 2>&1
-
-# if the username has changed, remove the previous username from htpasswd
-[[ -n "$USERNAME_PREVIOUS" ]] && [ "$USERNAME" != "$USERNAME_PREVIOUS" ] && sed -i "/^$USERNAME_PREVIOUS:/d" ./htpasswd
 
 echo ""
 LDAP_DEFAULT_SERVER_TYPE=${LDAP_SERVER_TYPE:-""}

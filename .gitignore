@@ -1,4 +1,3 @@
-auth.env
 .env
 /nginx/certs
 /nginx/ca-trust
