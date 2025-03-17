@@ -12,7 +12,7 @@ NGINX_CONFD_DIR=${NGINX_CONF_DIR}/conf.d
 NGINX_SSL_ON_CONF=${NGINX_CONF_DIR}/nginx_ssl_on_config.conf
 
 # "include" symlink name which, at runtime, will point to either the ON or OFF file
-NGINX_SSL_CONF=${NGINX_CONF_DIR}/nginx_ssl_config.conf
+NGINX_SSL_LINK=${NGINX_CONF_DIR}/nginx_ssl_config.conf
 
 # a blank file just to use as an "include" placeholder for when .conf files aren't used
 NGINX_BLANK_CONF=${NGINX_CONF_DIR}/nginx_blank.conf
@@ -28,9 +28,8 @@ NGINX_LDAP_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_ldap.conf
 
 # "include" file for KeyCloak authentication
 NGINX_KEYCLOAK_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_keycloak.conf
-
-# "include" file for KeyCloak authentication translating basic to token
-NGINX_KEYCLOAK_AUTH_BASIC_CONF=${NGINX_CONF_DIR}/nginx_auth_keycloak_basic.conf
+# experimental HTTP Basic Auth translation layer handling OAuth2 token exchange transparently
+NGINX_KEYCLOAK_AUTH_BASIC_TRANSLATE_CONF=${NGINX_CONF_DIR}/nginx_auth_keycloak_basic.conf
 
 # "include" file for fully disabling authentication
 NGINX_NO_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_disabled.conf
@@ -39,13 +38,16 @@ NGINX_NO_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_disabled.conf
 NGINX_LDAP_USER_CONF=${NGINX_CONF_DIR}/nginx_ldap.conf
 
 # runtime "include" file for auth method (link to NGINX_BASIC_AUTH_CONF, NGINX_LDAP_AUTH_CONF, NGINX_KEYCLOAK_AUTH_CONF, or NGINX_NO_AUTH_CONF)
-NGINX_RUNTIME_AUTH_CONF=${NGINX_CONF_DIR}/nginx_auth_rt.conf
+NGINX_RUNTIME_AUTH_LINK=${NGINX_CONF_DIR}/nginx_auth_rt.conf
 
 # runtime "include" file for a location where we basically force basic auth (symlink for keycloak to translate basic -> token)
-NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_CONF=${NGINX_CONF_DIR}/nginx_auth_basic_translate_rt.conf
+NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_LINK=${NGINX_CONF_DIR}/nginx_auth_basic_translate_rt.conf
 
 # runtime "include" file for ldap config (link to either NGINX_BLANK_CONF or (possibly modified) NGINX_LDAP_USER_CONF)
-NGINX_RUNTIME_LDAP_CONF=${NGINX_CONF_DIR}/nginx_ldap_rt.conf
+NGINX_RUNTIME_LDAP_LINK=${NGINX_CONF_DIR}/nginx_ldap_rt.conf
+
+# logging
+NGINX_LOGGING_CONF=${NGINX_CONF_DIR}/nginx_logging.conf
 
 # config file for stunnel if using stunnel to issue LDAP StartTLS function
 STUNNEL_CONF=/etc/stunnel/stunnel.conf
@@ -90,11 +92,11 @@ fi
 
 if [[ -z $NGINX_SSL ]] || [[ "$NGINX_SSL" != "false" ]]; then
   # doing encrypted HTTPS
-  ln -sf "$NGINX_SSL_ON_CONF" "$NGINX_SSL_CONF"
+  ln -sf "$NGINX_SSL_ON_CONF" "$NGINX_SSL_LINK"
   SSL_FLAG=" ssl"
 else
   # doing unencrypted HTTP (not recommended)
-  ln -sf "$NGINX_BLANK_CONF" "$NGINX_SSL_CONF"
+  ln -sf "$NGINX_BLANK_CONF" "$NGINX_SSL_LINK"
   SSL_FLAG=""
 fi
 # generate listen_####.conf files with appropriate SSL flag (since the NGINX
@@ -110,43 +112,52 @@ if [[ -f "${NGINX_CONF}" ]]; then
   done < "${NGINX_CONF}"
 fi
 
+# set logging level for error.log
+echo "error_log /var/log/nginx/error.log ${NGINX_ERROR_LOG_LEVEL:-error};" > "${NGINX_LOGGING_CONF}"
+
 # NGINX_AUTH_MODE basic|ldap|keycloak|no_authentication
 if [[ -z $NGINX_AUTH_MODE ]] || [[ "$NGINX_AUTH_MODE" == "basic" ]] || [[ "$NGINX_AUTH_MODE" == "true" ]]; then
   # doing HTTP basic auth
 
   # point auth to nginx_auth_basic.conf
-  ln -sf "$NGINX_BASIC_AUTH_CONF" "$NGINX_RUNTIME_AUTH_CONF"
-  ln -sf "$NGINX_BASIC_AUTH_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_CONF"
+  ln -sf "$NGINX_BASIC_AUTH_CONF" "$NGINX_RUNTIME_AUTH_LINK"
+  ln -sf "$NGINX_BASIC_AUTH_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_LINK"
 
   # ldap configuration is empty
-  ln -sf "$NGINX_BLANK_CONF" "$NGINX_RUNTIME_LDAP_CONF"
+  ln -sf "$NGINX_BLANK_CONF" "$NGINX_RUNTIME_LDAP_LINK"
 
 elif [[ "$NGINX_AUTH_MODE" == "no_authentication" ]] || [[ "$NGINX_AUTH_MODE" == "none" ]] || [[ "$NGINX_AUTH_MODE" == "no" ]]; then
   # completely disabling authentication (not recommended)
 
   # point auth to nginx_auth_disabled.conf
-  ln -sf "$NGINX_NO_AUTH_CONF" "$NGINX_RUNTIME_AUTH_CONF"
-  ln -sf "$NGINX_NO_AUTH_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_CONF"
+  ln -sf "$NGINX_NO_AUTH_CONF" "$NGINX_RUNTIME_AUTH_LINK"
+  ln -sf "$NGINX_NO_AUTH_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_LINK"
 
   # ldap configuration is empty
-  ln -sf "$NGINX_BLANK_CONF" "$NGINX_RUNTIME_LDAP_CONF"
+  ln -sf "$NGINX_BLANK_CONF" "$NGINX_RUNTIME_LDAP_LINK"
 
 elif [[ "$NGINX_AUTH_MODE" == "keycloak" ]]; then
   # Keycloak authentication
 
   # point auth to keycloak
-  ln -sf "$NGINX_KEYCLOAK_AUTH_CONF" "$NGINX_RUNTIME_AUTH_CONF"
-  ln -sf "$NGINX_KEYCLOAK_AUTH_BASIC_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_CONF"
+  ln -sf "$NGINX_KEYCLOAK_AUTH_CONF" "$NGINX_RUNTIME_AUTH_LINK"
+
+  if [[ "${NGINX_KEYCLOAK_BASIC_AUTH:-false}" == "true" ]]; then
+    # experimental
+    ln -sf "$NGINX_KEYCLOAK_AUTH_BASIC_TRANSLATE_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_LINK"
+  else
+    ln -sf "$NGINX_BASIC_AUTH_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_LINK"
+  fi
 
   # ldap configuration is empty
-  ln -sf "$NGINX_BLANK_CONF" "$NGINX_RUNTIME_LDAP_CONF"
+  ln -sf "$NGINX_BLANK_CONF" "$NGINX_RUNTIME_LDAP_LINK"
 
 elif [[ "$NGINX_AUTH_MODE" == "ldap" ]] || [[ "$NGINX_AUTH_MODE" == "false" ]]; then
   # ldap authentication
 
   # point nginx_auth_rt.conf to nginx_auth_ldap.conf
-  ln -sf "$NGINX_LDAP_AUTH_CONF" "$NGINX_RUNTIME_AUTH_CONF"
-  ln -sf "$NGINX_LDAP_AUTH_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_CONF"
+  ln -sf "$NGINX_LDAP_AUTH_CONF" "$NGINX_RUNTIME_AUTH_LINK"
+  ln -sf "$NGINX_LDAP_AUTH_CONF" "$NGINX_RUNTIME_AUTH_BASIC_TRANSLATE_LINK"
 
   # parse URL information out of user ldap configuration
   # example:
@@ -223,32 +234,32 @@ protocol = ldap
 EOF
 
     # rewrite modified copy of user ldap configuration to point to local end of tunnel instead of remote
-    rm -f "$NGINX_RUNTIME_LDAP_CONF"
-    touch "$NGINX_RUNTIME_LDAP_CONF"
-    chmod 600 "$NGINX_RUNTIME_LDAP_CONF"
+    rm -f "$NGINX_RUNTIME_LDAP_LINK"
+    touch "$NGINX_RUNTIME_LDAP_LINK"
+    chmod 600 "$NGINX_RUNTIME_LDAP_LINK"
     READ_LINE_NUM=0
     while IFS= read -r LINE; do
       READ_LINE_NUM=$((READ_LINE_NUM+1))
       if (( $URL_LINE_NUM == $READ_LINE_NUM )); then
-        echo "${HEADER}${OPEN_QUOTE}ldap://localhost:${LOCAL_PORT}${URI_TO_END}" >> "$NGINX_RUNTIME_LDAP_CONF"
+        echo "${HEADER}${OPEN_QUOTE}ldap://localhost:${LOCAL_PORT}${URI_TO_END}" >> "$NGINX_RUNTIME_LDAP_LINK"
       else
-        echo "$LINE" >> "$NGINX_RUNTIME_LDAP_CONF"
+        echo "$LINE" >> "$NGINX_RUNTIME_LDAP_LINK"
       fi
     done < "$NGINX_LDAP_USER_CONF"
 
   else
     # we're doing either LDAP or LDAPS, but not StartTLS, so we don't need to use stunnel.
     # however, we do want to set SSL CA trust stuff if specified, so do that
-    rm -f "$NGINX_RUNTIME_LDAP_CONF"
-    touch "$NGINX_RUNTIME_LDAP_CONF"
-    chmod 600 "$NGINX_RUNTIME_LDAP_CONF"
+    rm -f "$NGINX_RUNTIME_LDAP_LINK"
+    touch "$NGINX_RUNTIME_LDAP_LINK"
+    chmod 600 "$NGINX_RUNTIME_LDAP_LINK"
     READ_LINE_NUM=0
     while IFS= read -r LINE; do
       READ_LINE_NUM=$((READ_LINE_NUM+1))
-      echo "$LINE" >> "$NGINX_RUNTIME_LDAP_CONF"
+      echo "$LINE" >> "$NGINX_RUNTIME_LDAP_LINK"
       if (( $URL_LINE_NUM == $READ_LINE_NUM )); then
-        echo "$NGINX_LDAP_CHECK_REMOTE_CERT_LINE" >> "$NGINX_RUNTIME_LDAP_CONF"
-        echo "$NGINX_LDAP_CA_PATH_LINE" >> "$NGINX_RUNTIME_LDAP_CONF"
+        echo "$NGINX_LDAP_CHECK_REMOTE_CERT_LINE" >> "$NGINX_RUNTIME_LDAP_LINK"
+        echo "$NGINX_LDAP_CA_PATH_LINE" >> "$NGINX_RUNTIME_LDAP_LINK"
       fi
     done < "$NGINX_LDAP_USER_CONF"
 
