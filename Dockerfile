@@ -214,6 +214,7 @@ RUN set -x ; \
 ADD --chmod=755 https://raw.githubusercontent.com/mmguero/docker/master/shared/docker-uid-gid-setup.sh /usr/local/bin/docker-uid-gid-setup.sh
 ADD --chmod=755 scripts/*.sh /usr/local/bin/
 ADD --chmod=644 nginx/templates/* /etc/nginx/templates/
+ADD --chmod=644 nginx/lua/*.lua /usr/local/openresty/lualib/
 ADD --chmod=644 nginx/*.conf /etc/nginx/
 ADD --chmod=644 supervisord.conf /etc/
 
