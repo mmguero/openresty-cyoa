@@ -2,6 +2,23 @@ local _M = {}
 
 local cjson = require("cjson.safe")
 
+local function safe_encode(data)
+    local function clean(value)
+        if type(value) == "function" or type(value) == "userdata" or type(value) == "thread" then
+            return nil  -- Ignore unsupported types
+        elseif type(value) == "table" then
+            local new_table = {}
+            for k, v in pairs(value) do
+                new_table[k] = clean(v)
+            end
+            return new_table
+        else
+            return value
+        end
+    end
+    return cjson.encode(clean(data))
+end
+
 function _M.set_headers(username, token, groups, roles)
     if username ~= nil and username ~= '' then
         ngx.req.set_header("X-Remote-User", username)
@@ -73,20 +90,20 @@ function _M.introspect_token(httpc, introspect_url, access_token, client_id, cli
     if not res then
         ngx.log(ngx.ERR, "Access token validation request failed: ", err or "unknown error")
         ngx.status = 500
-        ngx.exit(ngx.HTTP_INTERNAL_SERVER_ERROR)
+        return ngx.HTTP_INTERNAL_SERVER_ERROR, nil
     end
     if res.status ~= 200 then
         ngx.log(ngx.ERR, "Introspection request failed with status ", res.status, ": ", res.body or "No response body")
         ngx.status = 401
-        ngx.exit(ngx.HTTP_UNAUTHORIZED)
+        return ngx.HTTP_UNAUTHORIZED, nil
     end
     local token_data, decode_err = cjson.decode(res.body)
     if not token_data then
         ngx.log(ngx.ERR, "Failed to parse introspection response: ", decode_err or "unknown error")
         ngx.status = 500
-        ngx.exit(ngx.HTTP_INTERNAL_SERVER_ERROR)
+        return ngx.HTTP_INTERNAL_SERVER_ERROR, nil
     end
-    return token_data
+    return ngx.HTTP_OK, token_data
 end
 
 function _M.check_groups_and_roles(token_data)
@@ -114,7 +131,7 @@ function _M.check_groups_and_roles(token_data)
             if not user_groups[required_group] then
                 ngx.log(ngx.ERR, "User " .. username .. " does not belong to required group: " .. required_group)
                 ngx.status = 403
-                ngx.exit(ngx.HTTP_FORBIDDEN)
+                return ngx.HTTP_FORBIDDEN, username, groups, roles
             end
         end
     end
@@ -132,12 +149,12 @@ function _M.check_groups_and_roles(token_data)
             if not user_roles[required_role] then
                 ngx.log(ngx.ERR, "User " .. username .. " does not have required role: " .. required_role)
                 ngx.status = 403
-                ngx.exit(ngx.HTTP_FORBIDDEN)
+                return ngx.HTTP_FORBIDDEN, username, groups, roles
             end
         end
     end
 
-    return username, groups, roles
+    return ngx.HTTP_OK, username, groups, roles
 end
 
 return _M
