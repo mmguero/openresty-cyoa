@@ -14,7 +14,7 @@ OpenResty CYOA is an Alpine Linux-based container image for [OpenResty](https://
 
 OpenResty CYOA will also act as a reverse proxy to serve HTTP connections over HTTPS (`NGINX_SSL=true`).
 
-OpenResty CYOA can be used with [Docker](https://docs.docker.com/get-docker/)/[Docker Compose](https://docs.docker.com/compose/) or [Podman](https://podman.io/)/[podman-compose](https://github.com/containers/podman-compose). Pre-built container images for AMD64 and ARM64 can be found on GitHub's container registry as [oci.guero.org/openresty-cyoa](https://github.com/mmguero/openresty-cyoa/pkgs/container/openresty-cyoa).
+OpenResty CYOA can be used with [Docker](https://docs.docker.com/get-docker/)/[Docker Compose](https://docs.docker.com/compose/) or [Podman](https://podman.io/)/[podman-compose](https://github.com/containers/podman-compose). Pre-built container images for AMD64 and ARM64 can be found on GitHub's container registry as [ghcr.io/mmguero/openresty-cyoa](https://github.com/mmguero/openresty-cyoa/pkgs/container/openresty-cyoa).
 
 ## Getting Started
 

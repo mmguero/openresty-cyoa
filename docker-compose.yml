@@ -16,7 +16,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: oci.guero.org/openresty-cyoa:latest
+    image: ghcr.io/mmguero/openresty-cyoa:latest
     container_name: openresty
     hostname: openresty
     restart: "no"
