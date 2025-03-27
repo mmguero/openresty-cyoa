@@ -206,7 +206,7 @@ elif [[ "$NGINX_AUTH_MODE" == "ldap" ]] || [[ "$NGINX_AUTH_MODE" == "false" ]]; 
     # create PEM key for stunnel (this key doesn't matter as we're only using stunnel in client mode)
     pushd /tmp >/dev/null 2>&1
     openssl genrsa -out key.pem 2048
-    openssl req -new -x509 -key key.pem -out cert.pem -days 3650 -subj "/CN=$(hostname)/O=Malcolm/C=US"
+    openssl req -new -x509 -key key.pem -out cert.pem -days 3650 -subj "/CN=$(hostname)/O=OpenResty/C=US"
     cat key.pem cert.pem > /etc/stunnel/stunnel.pem
     chmod 600 /etc/stunnel/stunnel.pem
     rm -f key.pem cert.pem
