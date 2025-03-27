@@ -21,6 +21,7 @@ end
 
 function _M.set_headers(username, token, groups, roles)
     if username ~= nil and username ~= '' then
+        ngx.req.set_header("X-Remote-Auth", username)
         ngx.req.set_header("X-Remote-User", username)
         ngx.req.set_header("X-Forwarded-User", username)
     end
