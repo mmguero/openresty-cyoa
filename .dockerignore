@@ -4,6 +4,5 @@
 **/.git*
 **/.env
 **/htpasswd
-docker-compose*yml
 Dockerfile
 nginx/nginx_ldap.conf

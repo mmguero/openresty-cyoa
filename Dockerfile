@@ -63,12 +63,12 @@ ENV NGINX_LDAP_TLS_STUNNEL_CHECK_HOST $NGINX_LDAP_TLS_STUNNEL_CHECK_HOST
 ENV NGINX_LDAP_TLS_STUNNEL_CHECK_IP $NGINX_LDAP_TLS_STUNNEL_CHECK_IP
 ENV NGINX_LDAP_TLS_STUNNEL_VERIFY_LEVEL $NGINX_LDAP_TLS_STUNNEL_VERIFY_LEVEL
 
-# build latest openresty with nginx-auth-ldap
 ENV OPENRESTY_VERSION=1.27.1.1
 ENV NGINX_AUTH_LDAP_BRANCH=master
 
-ADD --chmod=644 https://codeload.github.com/mmguero-dev/nginx-auth-ldap/tar.gz/$NGINX_AUTH_LDAP_BRANCH /nginx-auth-ldap.tar.gz
 ADD --chmod=644 https://openresty.org/download/openresty-$OPENRESTY_VERSION.tar.gz /openresty.tar.gz
+ADD --chmod=644 https://codeload.github.com/mmguero-dev/nginx-auth-ldap/tar.gz/$NGINX_AUTH_LDAP_BRANCH /nginx-auth-ldap.tar.gz
+ADD --chmod=755 https://raw.githubusercontent.com/mmguero/docker/master/shared/docker-uid-gid-setup.sh /usr/local/bin/docker-uid-gid-setup.sh
 
 RUN set -x ; \
     CONFIG="\
@@ -211,7 +211,6 @@ RUN set -x ; \
   find /usr/share/nginx/html/ -type d -exec chmod 755 "{}" \; && \
   find /usr/share/nginx/html/ -type f -exec chmod 644 "{}" \;
 
-ADD --chmod=755 https://raw.githubusercontent.com/mmguero/docker/master/shared/docker-uid-gid-setup.sh /usr/local/bin/docker-uid-gid-setup.sh
 ADD --chmod=755 scripts/*.sh /usr/local/bin/
 ADD --chmod=644 nginx/templates/* /etc/nginx/templates/
 ADD --chmod=644 nginx/lua/*.lua /usr/local/openresty/lualib/
@@ -229,11 +228,3 @@ ENTRYPOINT ["/sbin/tini", \
             "/usr/local/bin/docker_entrypoint.sh"]
 
 CMD ["supervisord", "-c", "/etc/supervisord.conf", "-u", "root", "-n"]
-
-
-# to be populated at build-time:
-ARG BUILD_DATE
-ARG VCS_REVISION
-
-LABEL org.opencontainers.image.created=$BUILD_DATE
-LABEL org.opencontainers.image.revision=$VCS_REVISION
