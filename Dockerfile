@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.21
 
 LABEL maintainer="mero.mero.guero@gmail.com"
 LABEL org.opencontainers.image.authors='mero.mero.guero@gmail.com'
