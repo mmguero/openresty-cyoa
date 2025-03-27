@@ -2,9 +2,9 @@ FROM alpine:3.20
 
 LABEL maintainer="mero.mero.guero@gmail.com"
 LABEL org.opencontainers.image.authors='mero.mero.guero@gmail.com'
-LABEL org.opencontainers.image.url='https://github.com/mmguero/openresty-loaded'
-LABEL org.opencontainers.image.source='https://github.com/mmguero/openresty-loaded'
-LABEL org.opencontainers.image.title='oci.guero.org/openresty-loaded'
+LABEL org.opencontainers.image.url='https://github.com/mmguero/openresty-cyoa'
+LABEL org.opencontainers.image.source='https://github.com/mmguero/openresty-cyoa'
+LABEL org.opencontainers.image.title='oci.guero.org/openresty-cyoa'
 LABEL org.opencontainers.image.description='Dockerized OpenResty with basic, LDAP, and Keycloak Authentication'
 
 ARG DEFAULT_UID=101
