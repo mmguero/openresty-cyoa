@@ -26,8 +26,8 @@ services:
       - .env
     depends_on:
       - whoami
-    # ports:
-    #   - "0.0.0.0:443:443"
+    ports:
+      - "127.0.0.1:443:443"
     networks:
       - default
     volumes:
@@ -42,12 +42,6 @@ services:
         create_host_path: false
       source: ./nginx/nginx.conf
       target: /etc/nginx/nginx.conf
-      read_only: true
-    - type: bind
-      bind:
-        create_host_path: false
-      source: ./nginx/nginx_auth_keycloak_basic.conf
-      target: /etc/nginx/nginx_auth_keycloak_basic.conf
       read_only: true
     - type: bind
       bind:
@@ -74,20 +68,20 @@ services:
       target: /etc/nginx/dhparam/dhparam.pem
       read_only: true
     healthcheck:
-      test: ["CMD", "curl", "--insecure", "--silent", "http://localhost:443"]
+      test: ["CMD", "curl", "--insecure", "--silent", "https://localhost:443"]
       interval: 30s
       timeout: 15s
       retries: 3
       start_period: 120s
     labels:
-      traefik.enable : true
-      traefik.http.routers.openresty.rule: "Host(`test.seven.local.lan`)"
-      traefik.http.routers.openresty.entrypoints: "websecure"
-      traefik.http.routers.openresty.tls.certresolver: "myresolver"
-      traefik.http.services.openresty.loadbalancer.server.port: 443
+      traefik.enable : false
+      # traefik.http.routers.openresty.rule: "Host(`test.example.org`)"
+      # traefik.http.routers.openresty.entrypoints: "websecure"
+      # traefik.http.routers.openresty.tls.certresolver: "myresolver"
+      # traefik.http.services.openresty.loadbalancer.server.port: 443
 
 networks:
   default:
-    external: true
-    name: traefik-proxy
+    external: false
+    # name: traefik-proxy
 
