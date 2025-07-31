@@ -1,3 +1,7 @@
 map ${DOLLAR}host ${DOLLAR}proxy_x_forwarded_proto_override {
   default "$NGINX_X_FORWARDED_PROTO_OVERRIDE";
 }
+
+map ${DOLLAR}host ${DOLLAR}admin_role {
+  default "$ROLE_ADMIN";
+}

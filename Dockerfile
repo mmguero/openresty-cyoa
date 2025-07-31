@@ -1,4 +1,4 @@
-FROM alpine:3.21
+FROM alpine:3.22
 
 LABEL maintainer="mero.mero.guero@gmail.com"
 LABEL org.opencontainers.image.authors='mero.mero.guero@gmail.com'
@@ -28,17 +28,6 @@ ARG NGINX_SSL=true
 # authentication method: basic|ldap|keycloak|no_authentication
 ARG NGINX_AUTH_MODE=basic
 
-# When using Keycloak authentication (NGINX_AUTH_MODE=keycloak),
-#   require authenticated users to belong to zero or more groups and/or to be
-#   assigned zero or more roles, respectively. Multiple values may be specified
-#   with a comma-separated list. Note that these requirements are cumulative:
-#   users must match all of the items specified. An empty value means no
-#   group/role restriction is applied. Note that NGINX LDAP (NGINX_AUTH_MODE=ldap)
-#   can also require group membership, but this is specified in nginx_ldap.conf
-#   with "require group" rather than here.
-ARG NGINX_REQUIRE_GROUP=
-ARG NGINX_REQUIRE_ROLE=
-
 # NGINX LDAP (NGINX_AUTH_MODE=ldap) can support LDAP, LDAPS, or LDAP+StartTLS.
 #   For StartTLS, set NGINX_LDAP_TLS_STUNNEL=true to issue the StartTLS command
 #   and use stunnel to tunnel the connection.
@@ -56,8 +45,6 @@ ARG NGINX_LDAP_TLS_STUNNEL_VERIFY_LEVEL=2
 
 ENV NGINX_SSL $NGINX_SSL
 ENV NGINX_AUTH_MODE $NGINX_AUTH_MODE
-ENV NGINX_REQUIRE_GROUP $NGINX_REQUIRE_GROUP
-ENV NGINX_REQUIRE_ROLE $NGINX_REQUIRE_ROLE
 ENV NGINX_LDAP_TLS_STUNNEL $NGINX_LDAP_TLS_STUNNEL
 ENV NGINX_LDAP_TLS_STUNNEL_CHECK_HOST $NGINX_LDAP_TLS_STUNNEL_CHECK_HOST
 ENV NGINX_LDAP_TLS_STUNNEL_CHECK_IP $NGINX_LDAP_TLS_STUNNEL_CHECK_IP
